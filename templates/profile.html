@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h2 {
+            text-align: center;
+            color: #043267;
+        }
+        .profile-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin: 40px auto;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+            color: #043267;
+        }
+        input[type="text"] {
+            width: 95%;
+            padding: 10px;
+            border: 1px solid #043267;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            transition: border 0.3s;
+        }
+        input[type="text"]:focus {
+            border: 1px solid #0356a1;
+        }
+        .readonly {
+            background-color: #f4f4f4;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #043267;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0356a1;
+        }
+        .update-button {
+            width: auto;
+            padding: 10px 20px;
+            background-color: #0356a1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .update-button:hover {
+            background-color: #043267;
+        }
+        .reset-password-button {
+            background-color: #e74c3c;
+            margin-top: 20px;
+        }
+        .reset-password-button:hover {
+            background-color: #c0392b;
+        }
+        .profile-info {
+            margin-bottom: 20px;
+        }
+        .signup-link {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .signup-link a {
+            color: #043267;
+            text-decoration: none;
+        }
+        .signup-link a:hover {
+            text-decoration: underline;
+        }
+
+        /* Flash message styling */
+        .flash-message {
+            margin-bottom: 15px;
+            border-radius: 5px;
+            color: #fff;
+            text-align: center;
+            font-size: 1em;
+            padding: 10px;
+        }
+        .flash-message.success {
+            background-color: #155724;  /* Green */
+        }
+        .flash-message.error {
+            background-color: #721c24;  /* Red */
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container">
+        <h2>Profile</h2>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div>
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <!-- Form to update name -->
+        <form method="POST" action="{{ url_for('updateUserProfile') }}">
+            <div class="profile-info">
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" value="{{ user.name }}" required>
+                <button class="update-button" type="submit">Update</button>
+            </div>
+        </form>
+
+        <!-- Display the user's email (readonly) -->
+        <div class="profile-info">
+            <label for="email">Email:</label>
+            <input type="text" id="email" name="email" value="{{ user.email }}" readonly class="readonly">
+        </div>
+
+        <!-- Form to reset password -->
+        <form method="POST" action="{{ url_for('gotoResetPassword') }}">
+            <button class="reset-password-button" type="submit">Reset Password</button>
+        </form>
+
+        <div class="signup-link">
+            <p>Want to logout? <a href="{{ url_for('logout') }}">Logout</a></p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twilio Configuration</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        h1 {
+            text-align: center;
+            color: #043267;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+        }
+        input[type="text"] {
+            width: 95%;
+            padding: 10px;
+            border: 1px solid #043267;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            transition: border 0.3s;
+        }
+        input[type="text"]:focus {
+            border: 1px solid #043267;
+            outline: none;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #043267;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #001f49;
+        }
+    </style>
+</head>
+<body>
+    <form id="twilioForm">
+        <h1>Twilio Configuration</h1>
+        <label for="twilioAccountSid">Twilio Account SID</label>
+        <input type="text" id="twilioAccountSid" name="twilioAccountSid" placeholder="Enter Twilio Account SID" required>
+
+        <label for="twilioAuthToken">Twilio Auth Token</label>
+        <input type="text" id="twilioAuthToken" name="twilioAuthToken" placeholder="Enter Twilio Auth Token" required>
+
+        <label for="twilioPhoneNumber">Twilio Phone Number</label>
+        <input type="text" id="twilioPhoneNumber" name="twilioPhoneNumber" placeholder="Enter Twilio Phone Number" required>
+
+        <label for="customerPhoneNumber">Customer Phone Number (if trial account)</label>
+        <input type="text" id="customerPhoneNumber" name="customerPhoneNumber" placeholder="Enter CustomerP Phone Number (if trial account)" required>
+
+        <button type="submit">Submit</button>
+    </form>
+
+    <script>
+        document.getElementById('twilioForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const formData = {
+                twilioAccountSid: document.getElementById('twilioAccountSid').value,
+                twilioAuthToken: document.getElementById('twilioAuthToken').value,
+                twilioPhoneNumber: document.getElementById('twilioPhoneNumber').value,
+                customerPhoneNumber: document.getElementById('customerPhoneNumber').value
+            };
+
+            try {
+                const response = await fetch('/submit-twilio-config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    window.location.href = '/query';  // Redirect to the 'query' page
+                } else {
+                    alert('Failed to submit Twilio configuration. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                alert('An error occurred. Please try again later.');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile  # Root directory Dockerfile
+    container_name: google-maps-scrapper
+    ports:
+      - "5000:5000"  # Map to the application's port
+    volumes:
+      - .:/app  # Mount the root directory for real-time changes
+    environment:
+      - ENV_VAR1=value1
+      - ENV_VAR2=value2
+      - PIP_DEFAULT_TIMEOUT=17200
+    command: ["python", "main.py"]  # Ensure this matches your root app's entry point
