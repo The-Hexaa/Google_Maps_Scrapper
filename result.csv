@@ -1,5 +1,8 @@
-Names,Website,Introduction,Phone Number,Address,Review Count,Average Review Count,Store Shopping,In Store Pickup,Delivery,Type,Opens At
-IN Canal Restaurant,N/A,N/A,+92 42 35830819,"Canal Road Crossing، 234 Lahore – Kasur Rd, near Metro Bus Canal Station, Abu Bakar Block Garden Town, Lahore, Punjab 54000, Pakistan",363,4.1,No,No,No,Restaurant,
-IN Canal Restaurant,facebook.com,N/A,+92 313 8455354,"Mini Tower, 5Th Floor, 27/A, opposite Mobilink, Block K Gulberg 2, Lahore, 54000, Pakistan",1969,4.7,No,No,No,Restaurant,
-Ambarsariya Restaurant,N/A,N/A,+92 321 4561677,"Mini Tower, 5Th Floor, 27/A, opposite Mobilink, Block K Gulberg 2, Lahore, 54000, Pakistan",11,4.1,No,No,No,Restaurant,
-Bella's Restaurant,N/A,N/A,+92 321 4561677,"G8CG+68H, Lahore – Kasur Rd, Fazlia Colony, Lahore, Punjab 54000, Pakistan",11,4.1,No,No,No,Restaurant,
+Names,Website,Introduction,Phone Number,Address,Review Count,Average Review Count,Store Shopping,In Store Pickup,Delivery,Type,Opens At,Questions,Answers,Meet Criteria
+Demo Business,,Demo Introduction,+923217989537,Demo Address,,,,,,,,do you have good food?,yes,True
+Al-Khair Cholloo Roast,,,+92 302 9205317,"F8XC+QQV, Barkat Market Pedestrian Bridge, Commercial Area Garden Town, Lahore, Punjab, Pakistan",515.0,4.2,No,No,No,Restaurant,,,,False
+Al-Khair Cholloo Roast,,,+92 307 4444628,"F8XC+QQV, Barkat Market Pedestrian Bridge, Commercial Area Garden Town, Lahore, Punjab, Pakistan",7.0,4.7,No,No,No,Restaurant,,,,False
+Student Food Point,,,+92 300 4726247,"Street 1G, Model Colony Lahore, Punjab 54000, Pakistan",298.0,4.1,No,No,No,Restaurant,,,,False
+Student Food Point,youtube.com,,+92 334 4335868,"Commercial Area Garden Town, Lahore, Punjab, Pakistan",1350.0,4.1,No,No,No,Fast food restaurant,,,,False
+Biryani King & Burgers,,,+92 300 7680593,"404, Lahore, 54000, Pakistan",1144.0,2.8,No,No,No,Fast food restaurant,,,,False
+Grill Hot Barkat Market,mcdonalds.com.pk,"Classic, long-running fast-food chain known for its burgers & fries.",+92 306 2731343,"Corporate Tower, 15 Main Boulevard Garden Town, Babar Block Garden Town, Lahore, Punjab 547000, Pakistan",1087.0,4.2,No,No,No,Fast food restaurant,,,,False

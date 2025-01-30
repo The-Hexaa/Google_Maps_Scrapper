@@ -2,6 +2,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask import Flask
 from uuid import uuid4
 from werkzeug.security import generate_password_hash, check_password_hash
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 
 # Initialize the database object
 db = SQLAlchemy()
@@ -11,7 +13,7 @@ class User(db.Model):
     __tablename__ = 'users'
     
     # Fields in the User table
-    user_id = db.Column(db.String(100), primary_key=True, unique=True, nullable=False)
+    user_id = db.Column(db.Integer, primary_key=True, autoincrement=True, nullable=False)  # Auto-incrementing user_id
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)

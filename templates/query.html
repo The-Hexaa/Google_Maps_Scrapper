@@ -61,7 +61,7 @@
             text-align: center;
             margin-top: 20px;
         }
-        #response {
+        #response, #bestOption {
             margin-top: 20px;
             overflow-x: auto;
         }
@@ -86,7 +86,6 @@
         tr:hover {
             background-color: #f1f1f1;
         }
-        /* CSS for Profile and Logout buttons */
         .top-buttons {
             position: fixed;
             top: 20px;
@@ -110,7 +109,6 @@
     </style>
 </head>
 <body>
-    <!-- Profile and Logout buttons in the top-right corner -->
     <div class="top-buttons">
         <button class="profile-btn" onclick="window.location.href='/profile'">Profile</button>
         <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
@@ -120,19 +118,29 @@
     <form id="queryForm">
         <label for="search">Enter search term:</label>
         <input type="text" id="search" required>
+
         <label for="message">Question you wanna ask?</label>
-        <input type="text" id="message" name="message" required><br><br>
+        <input type="text" id="message" name="message" required>
+
+        <label for="criteria">Enter criteria:</label>
+        <input type="text" id="criteria" name="criteria" required><br><br>
+
         <button type="submit">Submit</button>
     </form>
     <div id="loadingMessage">Loading, please wait...</div>
     <div id="response"></div>
+    <div id="bestOption">
+        <h2></h2>
+    </div>
 
     <script>
+        // Submit query form
         document.getElementById('queryForm').addEventListener('submit', async (e) => {
             e.preventDefault();
         
             const searchTerm = document.getElementById('search').value;
-            const message = document.getElementById('message').value; 
+            const message = document.getElementById('message').value;
+            const criteria = document.getElementById('criteria').value; 
             document.getElementById('loadingMessage').style.display = 'block';
 
             try {
@@ -142,6 +150,7 @@
                     body: JSON.stringify({ 
                         search_term: searchTerm, 
                         message: message,
+                        criteria: criteria,
                     })
                 });
                 const data = await response.json();
@@ -152,6 +161,7 @@
             }
         });
 
+        // Display results in a table
         function displayResults(data) {
             let html = `<table>
                 <tr><th>Name</th><th>Website</th><th>Introduction</th><th>Phone Number</th><th>Address</th>
@@ -166,6 +176,46 @@
             html += '</table>';
             document.getElementById('response').innerHTML = html;
         }
+
+        // Polling for best options
+        async function pollBestOptions() {
+            try {
+                const response = await fetch('/get-best-options');
+                if (response.ok) {
+                    const bestOptions = await response.json();
+                    displayBestOptions(bestOptions);
+                }
+            } catch (error) {
+                console.error('Error fetching best options:', error);
+            } finally {
+                // Poll every 5 seconds
+                setTimeout(pollBestOptions, 5000);
+            }
+        }
+
+        // Display best options dynamically
+        function displayBestOptions(data) {
+            const bestOptionDiv = document.getElementById('bestOption');
+            if (data.length) {
+                let html = `<table>
+                    <tr><th>Name</th><th>Website</th><th>Introduction</th><th>Phone Number</th><th>Address</th>
+                    <th>Review Count</th><th>Avg. Review</th><th>Store</th><th>Pickup</th><th>Delivery</th><th>Type</th><th>Opens At</th></tr>`;
+                data.forEach(row => {
+                    html += `<tr><td>${row.Names || ''}</td><td>${row.Website || ''}</td><td>${row.Introduction || ''}</td>
+                            <td>${row["Phone Number"] || ''}</td><td>${row.Address || ''}</td><td>${row["Review Count"] || ''}</td>
+                            <td>${row["Average Review Count"] || ''}</td><td>${row["Store Shopping"] || ''}</td>
+                            <td>${row["In Store Pickup"] || ''}</td><td>${row.Delivery || ''}</td><td>${row.Type || ''}</td>
+                            <td>${row["Opens At"] || ''}</td></tr>`;
+                });
+                html += '</table>';
+                bestOptionDiv.innerHTML = `<h2>Best Options:</h2>${html}`;
+            } else {
+                bestOptionDiv.innerHTML = '<h2>No Best Options Found</h2>';
+            }
+        }
+
+        // Start polling
+        pollBestOptions();
     </script>
 </body>
 </html>

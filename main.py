@@ -2,11 +2,13 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from playwright.sync_api import sync_playwright
 import pandas as pd
 import os
+from groq import Groq
 from flask_cors import CORS
 import requests
 import time
 from dotenv import load_dotenv
 import psycopg2
+import logging
 from psycopg2 import sql
 from model import db, User  # Import db and User model from model.py
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -19,7 +21,10 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+
 # Load configuration from environment variables
+app.config['SESSION_TYPE'] = 'filesystem'
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 CORS(app)
 
@@ -29,12 +34,22 @@ DB_NAME = os.getenv('DB_NAME')
 DB_USER = os.getenv('DB_USER')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 
+
+print(f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:5432/{DB_NAME}')
 # Construct the database URI
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:5432/{DB_NAME}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy with the app
 db.init_app(app)
+
+# Ensure tables are created
+with app.app_context():
+    db.create_all()
+
+criteria_F = "" 
+question_F = ""
+filtered_options_cache = None  # Global cache for best options
 
 def extract_data(xpath, data_list, page, timeout=5000):
     try:
@@ -137,6 +152,33 @@ def scrape_data(search_for, total=10):
                 'Type': place_t_list, 'Opens At': open_list
             })
 
+            # Add Questions, Answers, and "Meet Criteria" columns
+            df['Questions'] = ""  # Initialize empty column
+            df['Answers'] = ""    # Initialize empty column
+            df['Meet Criteria'] = False  # Add new column, set to False for all rows
+            df['Questions'] = df['Questions'].astype(str)
+            df['Answers'] = df['Answers'].astype(str)
+
+            # Add demo business row
+            demo_row = {
+                'Names': 'Demo Business',
+                'Website': 'N/A',
+                'Introduction': 'Demo Introduction',
+                'Phone Number': '+923217989537',
+                'Address': 'Demo Address',
+                'Review Count': 'N/A',
+                'Average Review Count': 'N/A',
+                'Store Shopping': 'N/A',
+                'In Store Pickup': 'N/A',
+                'Delivery': 'N/A',
+                'Type': 'N/A',
+                'Opens At': 'N/A',
+                'Questions': 'N/A',
+                'Answers': 'N/A',
+                'Meet Criteria': False  # Add Meet Criteria to demo row
+            }
+            df = pd.concat([pd.DataFrame([demo_row]), df], ignore_index=True)
+
             df.drop_duplicates(subset=['Names', 'Phone Number', 'Address'], inplace=True)
             df.dropna(axis=1, how='all', inplace=True)
             df.to_csv('result.csv', index=False)
@@ -180,7 +222,216 @@ def submit_twilio_config():
         # Handle exceptions and display error
         return render_template('twilio.html', error="Invalid credentials")
 
+@app.before_request
+def log_request():
+    print(f"Request: {request.method} {request.url}")
 
+def check_required_criteria(question, answer):
+    # # Get the criteria from the session
+    # print(f"Session in check_required_criteria: {session}")
+    # query_config = session.get('query')
+    # if not query_config:
+    #     print("Error: Query configuration not found in session.")
+    #     return jsonify({"error": "Query configuration is missing"}), 500
+    global criteria_F
+    try:
+        print("criteria_F: ", criteria_F)
+    except:
+        print("criteria_F: not found")
+    
+    criteria = criteria_F
+    if not criteria:
+        print("Error: Query criteria is missing in configuration.")
+        return jsonify({"error": "Invalid Query configuration"}), 500
+
+    try:
+        # Initialize the Groq client with the API key from the environment
+        client = Groq(
+            api_key="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",
+        )
+
+        # Prepare the prompt for the Groq API
+        prompt = (
+            f"Question: {question}, Answer: {answer}, Criteria: {criteria}. "
+            "Now you have to check if the answer meets the criteria or not. "
+            "If it meets the criteria then return True, and if it doesn't meet the criteria then return False. "
+            "Only return True or False, no need of other text."
+        )
+
+        # Get the chat completion from the Groq API
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            model="llama-3.3-70b-versatile",
+        )
+
+        # Get the response from the Groq API
+        response = chat_completion.choices[0].message.content.strip().lower()
+
+        print("Response = ", response)
+
+        # Check if the response contains any positive indication (like True, Yes)
+        if any(keyword in response for keyword in ["true", "yes", "correct", "affirmative", "valid"]):
+            return True
+        else:
+            return False
+
+    except Exception as e:
+        print(f"Error: Found issue in Groq: {e}")
+        return jsonify({"error": "An error occurred while processing the criteria check"}), 500
+
+@app.route("/webhook", methods=["POST", "GET"])
+def webhook():
+
+    if request.method == "GET":
+        # Dummy response for testing
+        return jsonify({
+            "message": "GET request successful",
+            "best_options": [{"Name": "Example", "Details": "Test data"}]
+        })
+
+    try:
+        # Initialize variables for storing question and answer
+        global question_F 
+        global first_question
+        answer = None
+
+        # Use a global variable to store the first question
+        if 'first_question' not in globals():
+            first_question = None
+
+        # Get the JSON data sent by VAPI
+        webhook_data = request.get_json()
+
+        if not webhook_data:
+            return jsonify({"error": "No data received"}), 400
+
+        # Extract relevant information
+        call_status = webhook_data.get("message", {}).get("call", {}).get("status", None)
+        transcription = webhook_data.get("message", {}).get("artifact", {}).get("transcript", None)
+        event_type = webhook_data.get("message", {}).get("type", None)
+        customer_number = webhook_data.get("message", {}).get("call", {}).get("customer", {}).get("number", None)
+
+        # Log extracted values for debugging
+        print(f"Extracted Values:\nCall Status: {call_status}\nTranscription: {transcription}\nEvent Type: {event_type}\nCustomer Number: {customer_number}")
+
+        # Extract first question and answer from the transcript (if available)
+        if transcription:
+            lines = transcription.split("\n")  # Split transcript into lines
+            for line in lines:
+                if line.startswith("AI:") and first_question is None:
+                    first_question = line[3:].strip()  # Save AI's first question
+                elif line.startswith("User:") and first_question:  # Only save answer if there's a first question
+                    answer = line[5:].strip()
+
+        # Use a global or session-based variable to track conversation updates
+        global conversation_update_count
+        if 'conversation_update_count' not in globals():
+            conversation_update_count = 0
+            print("Conversatioin update count: ", conversation_update_count)
+
+        # Handle 'Conversation Update' events
+        if event_type == "speech-update":
+            conversation_update_count += 1
+            print(f"Conversation update count: {conversation_update_count}")
+
+        # Handle call status changes
+        if event_type in ["end-of-call-report", "disconnected"]:
+            print(f"Call status received: {call_status}")
+            print("Call completed or disconnected.")
+
+            # Update the CSV file with the question and answer
+            if first_question and answer:
+                try:
+                    # Load the existing CSV into a DataFrame
+                    csv_file_path = "result.csv"
+                    df = pd.read_csv(csv_file_path)
+
+                    # Identify the row based on the phone number
+                    if customer_number:
+                        row_index = df.index[df['Phone Number'] == customer_number].tolist()
+                        if row_index:
+
+                            
+
+                            # Ensure columns are of object dtype
+                            df['Questions'] = df['Questions'].astype('object')
+                            df['Answers'] = df['Answers'].astype('object')
+
+                            # Update the Question and Answer columns for the matched row
+
+                            df.at[row_index[0], 'Questions'] = question_F
+                            df.at[row_index[0], 'Answers'] = answer
+                            df.at[row_index[0], 'Meet Criteria'] = check_required_criteria(question_F, answer)
+
+                            # Save the updated DataFrame back to the CSV
+                            df.to_csv(csv_file_path, index=False)
+                            print(f"CSV updated with question and answer for phone number {customer_number}")
+
+                            # Call the display_best_options function to filter the DataFrame
+                            best_options = display_best_options(df)
+
+                            global filtered_options_cache
+                            filtered_options_cache = best_options.to_dict(orient='records')
+
+                            # Return the filtered options
+                            return jsonify({
+                                "message": "Call has been completed or disconnected.",
+                                "best_options": filtered_options_cache
+                            }), 200
+
+                            
+                        else:
+                            print(f"No matching row found for phone number {customer_number}")
+                    else:
+                        print("Customer phone number not available in session.")
+
+                except Exception as e:
+                    print(f"Error updating CSV: {e}")
+            else:
+                print("No question or answer to update.")
+
+            return jsonify({"message": "Call has been completed or disconnected."}), 200
+
+        # Default response for unexpected scenarios
+        return jsonify({"message": "Waiting for user response or other event."}), 200
+
+    except Exception as e:
+        print(f"Error handling webhook: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+    finally:
+        # Print the first question and last answer at the end
+        print(f"Question: {first_question}")
+        print(f"Answer: {answer}")
+        # display_best_options()
+
+def display_best_options(df):
+    print("display_best_Options is called.")
+    
+    # Filter rows where 'meet criteria' is True
+    filtered_df = df[df['Meet Criteria'] == True]
+    
+    # Optionally, reset the index for a clean output
+    filtered_df = filtered_df.reset_index(drop=True)
+
+    # Replace NaN values with "N/A" or "demo" in the entire dataframe
+    filtered_df = filtered_df.fillna("N/A")
+    
+    print("filtered_df after replacing NaN with 'N/A':")
+    print(filtered_df)
+    
+    return filtered_df
+
+@app.route("/get-best-options", methods=["GET"])
+def get_best_options():
+    global filtered_options_cache
+    if filtered_options_cache is not None:
+        return jsonify(filtered_options_cache), 200
+    return jsonify({"message": "No best options available"}), 404
+
+@app.route("/make_call", methods=["POST"])
 def make_call(phone_number, customer_number, message):
     try:
         # Get Twilio credentials from session
@@ -209,6 +460,8 @@ def make_call(phone_number, customer_number, message):
                     "systemPrompt": os.getenv("VAPI_SYSTEM_PROMPT")
                 },
                 "firstMessage": message,
+                "endCallFunctionEnabled": True,
+                "endCallMessage": "bye"
             },
             "phoneNumber": {
                 "twilioAccountSid": twilio_account_sid,
@@ -217,12 +470,11 @@ def make_call(phone_number, customer_number, message):
             },
             "customer": {
                 "number": customer_number  # Customer phone number
-            }
+            },
         }
 
         headers = {
             "Authorization": f"Bearer {os.getenv('VAPI_BEARER_TOKEN')}",  # VAPI Bearer token
-            # "Authorization": "Bearer ceaece8d-3bf4-4b5f-8701-fb8d1703fa0c",
             "Content-Type": "application/json"
         }
 
@@ -232,13 +484,26 @@ def make_call(phone_number, customer_number, message):
         # Check for errors in the response
         response.raise_for_status()
 
-        # Return response JSON
-        return response.json()
+        # Print full response for debugging
+        # print(f"API Response: {response.json()}")
+
+        # Extract the ID (used as session ID)
+        session_id = response.json().get("id")
+        if not session_id:
+            print("Error: 'id' not found in the response.")
+            return {"error": "'id' not found in the response."}
+        
+        print(f"Call initiated successfully. Session ID: {session_id}")
+
+        # Return the session ID
+        return {"session_id": session_id, "message": "Call initiated successfully."}
     
     except requests.exceptions.RequestException as e:
         print(f"Error making call to {phone_number}: {e}")
         return {"error": str(e)}
-# # Example usage:
+
+
+# Example usage:
 # customer_number = "+923116805861"  # Customer's phone number
 # result = make_call("+19083864875", customer_number)
 # print(result)
@@ -280,21 +545,21 @@ def index():
 def authenticateUser():
     try:
         # Get username and password from the form
-        username = request.form.get('username')
+        username = request.form.get('username')  # Email is passed as 'username'
         password = request.form.get('password')
 
+        print(f"Debug: Received login request. Username: {username}, Password: {'*' * len(password) if password else 'None'}")
+
         if not username or not password:
-            print("Error: Username or password not provided.")
+            print("Debug: Missing username or password.")
             return render_template('login.html', error="Both username and password are required.")
 
         # Establish a database connection
         try:
             conn = get_db_connection()
-            if not conn:
-                print("Error: Failed to establish database connection.")
-                return render_template('login.html', error="Database connection error!")
+            print("Debug: Database connection established.")
         except Exception as e:
-            print(f"Error connecting to database: {e}")
+            print(f"Debug: Error connecting to database: {e}")
             return render_template('login.html', error="An error occurred while connecting to the database. Please try again.")
 
         try:
@@ -308,49 +573,51 @@ def authenticateUser():
                         (username,)
                     )
                     user = cur.fetchone()
-                    print(f"Info: Query executed for username '{username}'.")
+                    print(f"Debug: Query executed for username: {username}. Query result: {user}")
                 except Exception as e:
-                    print(f"Error executing query for username '{username}': {e}")
+                    print(f"Debug: Error executing query for username '{username}': {e}")
                     return render_template('login.html', error="An error occurred during authentication. Please try again.")
 
                 if user:
                     try:
                         # Assuming the password is the 3rd column in the tuple
-                        stored_password_hash = user[3]  # Update index if the table schema differs
-                        print("Info: User record retrieved. Validating password.")
+                        stored_password_hash = user[3]  # Update index if table schema differs
+                        print(f"Debug: User record retrieved. Stored password hash: {stored_password_hash}")
 
                         # Verify the password
                         if check_password_hash(stored_password_hash, password):
                             session['username'] = username  # Set session data
-                            print(f"Info: User '{username}' successfully authenticated.")
+                            print(f"Debug: User '{username}' successfully authenticated.")
                             return render_template('twilio.html')
                         else:
-                            print(f"Error: Invalid password for username '{username}'.")
+                            print(f"Debug: Password mismatch for user '{username}'.")
                             return render_template('login.html', error="Invalid credentials.")
                     except Exception as e:
-                        print(f"Error during password validation for username '{username}': {e}")
+                        print(f"Debug: Error during password validation for username '{username}': {e}")
                         return render_template('login.html', error="An error occurred during authentication.")
                 else:
-                    print(f"Error: No user found for username '{username}'.")
+                    print(f"Debug: No user found with username '{username}'.")
                     return render_template('login.html', error="Invalid credentials.")
         except Exception as e:
-            print(f"Error handling database operations: {e}")
+            print(f"Debug: Error during database operations: {e}")
             return render_template('login.html', error="An error occurred while processing your request.")
         finally:
             # Ensure the database connection is closed
             try:
                 conn.close()
-                print("Info: Database connection closed.")
+                print("Debug: Database connection closed.")
             except Exception as e:
-                print(f"Error closing database connection: {e}")
+                print(f"Debug: Error while closing database connection: {e}")
 
     except Exception as e:
-        print(f"Unexpected error in authenticateUser function: {e}")
+        print(f"Debug: Unexpected error in authenticateUser function: {e}")
         return render_template('login.html', error="An unexpected error occurred. Please try again.")
 
 @app.route('/query', methods=['GET', 'POST'])
 def query():
     try:
+        global filtered_options_cache
+        filtered_options_cache = None
         # Get Twilio configuration from the session
         twilio_config = session.get('twilio_config')
         if not twilio_config:
@@ -373,6 +640,7 @@ def query():
                 # Extract data from the POST request
                 search_term = request.json.get('search_term')
                 message = request.json.get('message')
+                criteria = request.json.get('criteria')
 
                 if not search_term:
                     print("Error: Search term is missing in POST request.")
@@ -381,6 +649,26 @@ def query():
                 if not message:
                     print("Error: Message is missing in POST request.")
                     return jsonify({"error": "Message is required"}), 400
+                
+                if not criteria:
+                    print("Error: Criteria is missing in POST request.")
+                    return jsonify({"error": "Criteria is required"}), 400
+                
+                try:
+                    global criteria_F
+                    global question_F
+                    criteria_F = criteria
+                    question_F = message
+                    # Store the configuration in the session
+                    session['query'] = {
+                        "search_term": search_term,
+                        "question": message,
+                        "criteria": criteria
+                    }
+                    print("Session data:", session)
+                except Exception as e:
+                    print(f"Error: couldn't enter query information in session: {e}")
+                
 
                 # Scrape data based on the search term
                 try:
@@ -394,6 +682,7 @@ def query():
                 try:
                     make_call(twilio_phone_number, customer_number, message)
                     print(f"Info: Call initiated successfully from {twilio_phone_number} to {customer_number}.")
+                    return data.to_dict(orient='records')
                 except Exception as e:
                     print(f"Error making call from {twilio_phone_number} to {customer_number}: {e}")
                     return jsonify({"error": "An error occurred while making the call"}), 500
@@ -685,6 +974,6 @@ def getUserProfile():
         return render_template('error.html', error="An unexpected error occurred. Please try again later.")
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
     

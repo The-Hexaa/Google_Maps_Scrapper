@@ -4,14 +4,49 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile  # Root directory Dockerfile
-    container_name: google-maps-scrapper
+      dockerfile: Dockerfile
+    container_name: geo-query-analyzer
     ports:
-      - "5000:5000"  # Map to the application's port
+      - "5000:5000"
     volumes:
-      - .:/app  # Mount the root directory for real-time changes
+      - .:/app
+    env_file:
+      - .env  # Specify the .env file to load
     environment:
-      - ENV_VAR1=value1
-      - ENV_VAR2=value2
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - PIP_DEFAULT_TIMEOUT=17200
-    command: ["python", "main.py"]  # Ensure this matches your root app's entry point
+    depends_on:
+      db:
+        condition: service_healthy  # Wait for db to be healthy
+    command: ["python", "main.py"]
+    networks:
+      - app_network  # Explicitly define the network for the app service
+
+  db:
+    image: postgres:14
+    container_name: db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgresql2003
+      POSTGRES_DB: my_user_db
+    ports:
+      - "5432:5432"  # Expose PostgreSQL
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persist data
+    networks:
+      - app_network  # Explicitly define the network for the db service
+    healthcheck:  # Add healthcheck to ensure db is ready before app starts
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  app_network:
+    driver: bridge  # Explicitly define the bridge network
