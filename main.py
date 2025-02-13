@@ -62,7 +62,7 @@ def extract_data(xpath, data_list, page, timeout=5000):
         print(f"Skipping element at {xpath} due to timeout/error: {e}")
         data_list.append("N/A")  # Default value if data can't be fetched
 
-def scrape_data(search_for, total=10):
+def scrape_data(search_for, customer_number, total=10):
     names_list, address_list, website_list, phones_list = [], [], [], []
     reviews_c_list, reviews_a_list = [], []
     store_s_list, in_store_list, store_del_list = [], [], []
@@ -164,7 +164,7 @@ def scrape_data(search_for, total=10):
                 'Names': 'Demo Business',
                 'Website': 'N/A',
                 'Introduction': 'Demo Introduction',
-                'Phone Number': '+923217989537',
+                'Phone Number': customer_number,
                 'Address': 'Demo Address',
                 'Review Count': 'N/A',
                 'Average Review Count': 'N/A',
@@ -461,7 +461,7 @@ def make_call(phone_number, customer_number, message):
                 },
                 "firstMessage": message,
                 "endCallFunctionEnabled": True,
-                "endCallMessage": "bye"
+                "endCallMessage": "Thankyou, bye"
             },
             "phoneNumber": {
                 "twilioAccountSid": twilio_account_sid,
@@ -672,7 +672,7 @@ def query():
 
                 # Scrape data based on the search term
                 try:
-                    data = scrape_data(search_term, total=10)
+                    data = scrape_data(search_term, customer_number, total=10)
                     print(f"Info: Data scraped successfully for search term: {search_term}")
                 except Exception as e:
                     print(f"Error scraping data for search term '{search_term}': {e}")
